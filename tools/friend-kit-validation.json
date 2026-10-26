@@ -1,0 +1,91 @@
+[
+  {
+    "test": "Reject wrong VPK before target creation",
+    "exit_code": 1,
+    "output": "ERROR: Workshop version differs from the tested GemTD Debug baseline. Nothing installed. Ask the host for a kit supporting your version; do not patch this unknown version."
+  },
+  {
+    "test": "Fresh install from shipped ZIP",
+    "exit_code": 0,
+    "output": "Extracting and checking the tested Workshop build...\nSUCCESS: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\dota_addons\\gemtd_debug\nGemTD Debug Build: 946DE6E9DDE8C806\nNormal Dota console: sv_cheats 0\nThen: dota_launch_custom_game gemtd_debug gemtd_coop"
+  },
+  {
+    "test": "All 2508 installed files byte-identical to tested host runtime",
+    "passed": true
+  },
+  {
+    "test": "Repeat install is no-op",
+    "exit_code": 0,
+    "output": "Already installed; no reinstall necessary. GemTD Debug Build: 946DE6E9DDE8C806"
+  },
+  {
+    "test": "Verify fresh install",
+    "exit_code": 0,
+    "output": "Verified. GemTD Debug Build: 946DE6E9DDE8C806"
+  },
+  {
+    "test": "Verify current host runtime with four ignored caches",
+    "exit_code": 0,
+    "output": "Verified. GemTD Debug Build: 946DE6E9DDE8C806"
+  },
+  {
+    "test": "Generated cache ignored",
+    "exit_code": 0,
+    "output": "Verified. GemTD Debug Build: 946DE6E9DDE8C806"
+  },
+  {
+    "test": "Unexpected runtime file rejected",
+    "exit_code": 1,
+    "output": "ERROR: Unexpected runtime file: unexpected.lua"
+  },
+  {
+    "test": "Rebuild divergent addon and preserve backup",
+    "exit_code": 0,
+    "output": "Unexpected runtime file: unexpected.lua\nExtracting and checking the tested Workshop build...\nSUCCESS: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\dota_addons\\gemtd_debug\nGemTD Debug Build: 946DE6E9DDE8C806\nPrevious installation preserved: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\gemtd_debug.backup.e73042672d4443b1b5e038a961fbdc37\nNormal Dota console: sv_cheats 0\nThen: dota_launch_custom_game gemtd_debug gemtd_coop"
+  },
+  {
+    "test": "Changed Lua rejected",
+    "exit_code": 1,
+    "output": "ERROR: Different runtime file: scripts/vscripts/addon_game_mode.lua"
+  },
+  {
+    "test": "Rebuild altered Lua",
+    "exit_code": 0,
+    "output": "Different runtime file: scripts/vscripts/addon_game_mode.lua\nExtracting and checking the tested Workshop build...\nSUCCESS: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\dota_addons\\gemtd_debug\nGemTD Debug Build: 946DE6E9DDE8C806\nPrevious installation preserved: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\gemtd_debug.backup.de9e439195874ba3bb0be11bd8950d31\nNormal Dota console: sv_cheats 0\nThen: dota_launch_custom_game gemtd_debug gemtd_coop"
+  },
+  {
+    "test": "Rebuilt addon verifies",
+    "exit_code": 0,
+    "output": "Verified. GemTD Debug Build: 946DE6E9DDE8C806"
+  },
+  {
+    "test": "Uninstall disables addon and preserves backup",
+    "exit_code": 0,
+    "output": "Uninstalled. Files preserved at: F:\\CodexProjects\\GemTD-Debug\\tools\\friend-kit-validation\\install\\game\\gemtd_debug.uninstalled.84d4bb2e39d24900812d65c38a1f1499"
+  },
+  {
+    "test": "Uninstall is idempotent",
+    "exit_code": 0,
+    "output": "Already uninstalled."
+  },
+  {
+    "test": "Refuse developer junction target",
+    "exit_code": 1,
+    "output": "ERROR: Refusing junction/symlink: F:\\Steam\\steamapps\\common\\dota 2 beta\\game\\dota_addons\\gemtd_debug"
+  },
+  {
+    "test": "Actual Steam discovery under Windows PowerShell 5.1",
+    "result": {
+      "Dota": [
+        "F:\\Steam\\steamapps\\common\\dota 2 beta"
+      ],
+      "Vpk": [
+        "F:\\Steam\\steamapps\\workshop\\content\\570\\474619917\\474619917.vpk"
+      ]
+    }
+  },
+  {
+    "test": "CMD wrapper succeeds with explicit host target",
+    "output": "Verified. GemTD Debug Build: 946DE6E9DDE8C806"
+  }
+]

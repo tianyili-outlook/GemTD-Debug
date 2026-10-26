@@ -1,0 +1,19 @@
+# Local application configuration and credentials
+.codex/
+.agents/
+.aws/
+.env
+.env.*
+*.pem
+*.key
+
+# Python caches and downloaded test dependencies
+__pycache__/
+*.py[cod]
+tools/.test-deps/
+
+# Original 233 MB archive; extracted runtime and baseline manifest are tracked
+/baseline/*.vpk
+
+# Generated distribution packages
+/dist/

@@ -1,0 +1,504 @@
+--- baseline/scripts/vscripts/addon_game_mode.lua
++++ game/gemtd_debug/scripts/vscripts/addon_game_mode.lua
+@@ -631,6 +631,8 @@
+ end
+ --初始化1
+ function Activate()
++	-- Private gemtd_debug build: enable GemTD's existing developer pathway.
++	_G.myself = true
+ 	print ("GemTD START!")
+ 	_G.AddonTemplate = GemTD()
+ 	_G.AddonTemplate:InitGameMode()
+@@ -658,6 +660,7 @@
+ 	GameRules:GetGameModeEntity():DisableHudFlip(true)
+ 
+ 	_G.is_heros_get_sended = nil
++	_G.debug_player_info = { pending = {}, initialized = {}, seen = {}, retry_at = 0, failures = 0 }
+ 	_G.error_trace = {}
+ 	_G.pcount = ''
+ 	_G.playerid2hero = {}
+@@ -2612,6 +2615,7 @@
+ 
+ --玩家连入游戏/重连
+ function GemTD:OnPlayerReconnected(keys)
++	if _G.myself == true then self:DebugPlayerInfoWatch() end
+ 	--重连的玩家
+ 	local hero = _G.playerid2hero[keys.PlayerID]
+ 	if hero == nil or hero:IsNull() == true then return end
+@@ -4491,7 +4495,126 @@
+ 	end
+ end
+ --游戏流程6——结束游戏，发送成绩
++-- Read-only observers: failures must never interrupt the original settlement flow.
++function GemTDSettlementObserve(callback)
++	if _G.myself ~= true then return end
++	local ok = pcall(callback)
++	if not ok then print('[GemTD Settlement] diagnostic unavailable (observer error; details withheld)') end
++end
++
++function GemTDSettlementSafe(value, secrets)
++	local text = tostring(value)
++	for _, secret in ipairs(secrets or {}) do
++		if secret ~= '' then
++			local pattern = secret:gsub('(%W)', '%%%1')
++			text = text:gsub(pattern, '<redacted>')
++			-- Also cover a server echo using JSON escapes or URL encoding.
++			local encoded = json.encode(secret)
++			if type(encoded) == 'string' then
++				encoded = encoded:sub(2, -2):gsub('(%W)', '%%%1')
++				text = text:gsub(encoded, '<redacted>')
++			end
++			local escaped = secret:gsub('([^%w%-%._~])', function(c) return string.format('%%%02X', string.byte(c)) end)
++			text = text:gsub(escaped:gsub('(%W)', '%%%1'), '<redacted>')
++		end
++	end
++	-- Never emit credential-bearing fields, even if not one of our own keys.
++	local lower = text:lower()
++	for offset in lower:gmatch('()[:=]') do
++		local name = lower:sub(math.max(1, offset-256), offset-1):match('([%w_%-]+)["\']?%s*$') or ''
++		if name:find('key', 1, true) or name:find('token', 1, true) or name:find('secret', 1, true)
++			or name:find('password', 1, true) or name:find('auth', 1, true) or name:find('credential', 1, true)
++			or name:find('cookie', 1, true) or name:find('signature', 1, true) then
++			return '<withheld: sensitive field>'
++		end
++	end
++	return text:gsub('[%z\1-\8\11\12\14-\31\127]', '?'):gsub('\r', '\\r'):gsub('\n', '\\n')
++end
++
++function GemTDSettlementLog(label, value, secrets, limit)
++	local text = GemTDSettlementSafe(value, secrets)
++	local cap = limit or 2048
++	if #text > cap then text = text:sub(1, cap)..' <truncated>' end
++	print('[GemTD Settlement] '..label..'='..text)
++end
++
++function GemTDSettlementKeys(query)
++	local secrets = {}
++	for index = 1, 5 do
++		local name = index == 1 and 'key' or ('key'..index)
++		local value = query:match('[?&]'..name..'=([^&]*)')
++		local status
++		if value == nil then status = 'MISSING'
++		elseif value == '' then status = 'EMPTY'
++		elseif value == 'Invalid_NotOnDedicatedServer' then status = value
++		elseif value:match('^Invalid_') then status = 'INVALID_SENTINEL (value withheld)'; table.insert(secrets, value)
++		else
++			status = 'PRESENT_OPAQUE (not proof of backend acceptance)'
++			table.insert(secrets, value)
++		end
++		print('[GemTD Settlement] key'..index..'='..status)
++	end
++	return secrets
++end
++
++function GemTDSettlementResponse(result, secrets)
++	GemTDSettlementLog('HTTP completed status', result.StatusCode)
++	if result.StatusCode == nil or result.StatusCode == 0 then
++		print('[GemTD Settlement] transport failure/timeout (HTTP callback supplies no precise cause)')
++	end
++	local body = result.Body
++	if body == nil or body == '' then
++		print('[GemTD Settlement] response body EMPTY/MISSING')
++		return
++	end
++	print('[GemTD Settlement] response body bytes='..#body..' (log cap 16384 bytes)')
++	local ok, decoded = pcall(json.decode, body)
++	-- Inspect decoded strings too: a key may be Unicode-escaped in the raw JSON.
++	local function contains_secret(value, depth)
++		if depth > 16 then return true end
++		if type(value) == 'string' then
++			for _, secret in ipairs(secrets) do if value:find(secret, 1, true) then return true end end
++		elseif type(value) == 'table' then
++			for k, v in pairs(value) do
++				if type(k) == 'string' and GemTDSettlementSafe('"'..k..'":', {}) == '<withheld: sensitive field>' then return true end
++				if contains_secret(k, depth+1) or contains_secret(v, depth+1) then return true end
++			end
++		end
++		return false
++	end
++	if ok and contains_secret(decoded, 0) then
++		print('[GemTD Settlement] response body=<withheld: sensitive content>')
++	else
++		local safe = GemTDSettlementSafe(body, secrets)
++		local length = math.min(#safe, 16384)
++		for offset = 1, length, 1024 do
++			print('[GemTD Settlement] response body chunk '..math.floor((offset-1)/1024+1)..'='..safe:sub(offset, math.min(offset+1023, length)))
++		end
++		if #safe > length then print('[GemTD Settlement] response body TRUNCATED at 16384 bytes') end
++	end
++	if not ok or type(decoded) ~= 'table' then
++		print('[GemTD Settlement] JSON summary unavailable: invalid JSON or non-object response')
++		return
++	end
++	for _, field in ipairs({'err', 'msg', 'error', 'status', 'success', 'award', 'award_item', 'award_extend',
++		'level', 'rank', 'total', 'shell', 'player_count', 'quest', 'quest_expire', 'quest_finish_count', 'finishd_quest'}) do
++		local value = decoded[field]
++		if type(value) == 'table' then value = '<object; see sanitized response body>' end
++		GemTDSettlementLog('JSON '..field, value, secrets, 512)
++	end
++end
++
+ function send_ranking ()
++	GemTDSettlementObserve(function()
++		print('[GemTD Settlement] send_ranking ENTER')
++		GemTDSettlementLog('map', GetMapName())
++		GemTDSettlementLog('level', _G.level)
++		GemTDSettlementLog('game_time', GameRules:GetGameTime())
++		GemTDSettlementLog('player_count', PlayerResource:GetPlayerCount())
++		GemTDSettlementLog('is_cheat', _G.is_cheat)
++		GemTDSettlementLog('is_posted_game', _G.is_posted_game)
++		GemTDSettlementLog('steam_ids', _G.steam_ids_only)
++	end)
+ 	-- if _G.myself == false then 
+ 	-- 	--不让外人提交测试榜单
+ 	-- 	GameRules:SendCustomMessage('游戏结束，测试版本暂时不可以提交合作模式的成绩。',0,0)
+@@ -4499,9 +4622,11 @@
+ 	-- end
+ 
+ 	if _G.is_cheat == 2 then
++		GemTDSettlementObserve(function() print('[GemTD Settlement] SKIP is_cheat == 2') end)
+ 		GameRules:SendCustomMessage("#text_no_upload_because_cheat", 0, 0)
+ 	else
+ 		if _G.is_posted_game == true then
++			GemTDSettlementObserve(function() print('[GemTD Settlement] SKIP already posted') end)
+ 			GameRules:SendCustomMessage('成绩已经提交过了，不再重复提交。',0,0)
+ 			return
+ 		end
+@@ -4616,6 +4741,17 @@
+ 			extra_kill = _G.extra_kill,
+ 			maze_length = _G.gem_maze_length,
+ 		} )
++
++		GemTDSettlementObserve(function()
++			print('[GemTD Settlement] PUBLISHED game_state.send_ranking; awaiting Panorama catch_crab')
++			GemTDSettlementLog('time_cost', g_time)
++			GemTDSettlementLog('finishd_quest', finishd_quest)
++			GemTDSettlementLog('towers', towers_str, nil, 4096)
++			GemTDSettlementLog('kills', _G.kills)
++			GemTDSettlementLog('gold', _G.team_gold)
++			GemTDSettlementLog('extra_kill', _G.extra_kill)
++			GemTDSettlementLog('maze_length', _G.gem_maze_length)
++		end)
+ 
+ 		-- SendCoopRanking({
+ 		-- 	level = _G.level, 
+@@ -7490,8 +7626,14 @@
+ 	if hero == nil or hero:IsNull() == true then return end
+ 	-- local player = userid2player[keys.userid]
+ 	local heroindex = hero:GetEntityIndex()
+-	if heroindex == nil or _G.playerInfoReceived[heroindex] == nil then return end
+-	local steam_id = _G.playerInfoReceived[heroindex].steam_id
++	if heroindex == nil then return end
++	local player_info = _G.playerInfoReceived[heroindex]
++	-- Allow local developer chat before backend player information arrives.
++	if player_info == nil and _G.myself == true then
++		player_info = { steam_id = tostring(PlayerResource:GetSteamID(player_id)) }
++	end
++	if player_info == nil then return end
++	local steam_id = player_info.steam_id
+ 	local tokens =  string.split (string.trim(string.lower(keys.text)))
+ 	if (
+ 		tokens[1] == "-lvlup" or
+@@ -7987,17 +8129,46 @@
+ 		return
+ 	end
+ 	local user = keys.user
++	local settlement_diag = _G.myself == true and (cb == 'send_ranking_cb' or (type(url) == 'string' and url:find('/ranking/add/', 1, true) ~= nil))
++	local diag_secrets = nil
++	if settlement_diag then
++		GemTDSettlementObserve(function() print('[GemTD Settlement] catch_crab request received') end)
++	end
+ 
+ 	url = string.gsub(url,"gemtd/ranking/add/","gemtd/202408/ranking/add/")
+-	url = url..GetSendKey()
++	local send_key = GetSendKey()
++	url = url..send_key
++	if settlement_diag then
++		GemTDSettlementObserve(function()
++			diag_secrets = GemTDSettlementKeys(send_key)
++			print('[GemTD Settlement] endpoint=gemtd/202408/ranking/add/ (URL arguments and keys omitted)')
++			GemTDSettlementLog('callback', cb, diag_secrets)
++			GemTDSettlementLog('request_user', user, diag_secrets)
++		end)
++	end
+ 	
+ 	local r = RandomFloat(0,1)
+ 	Timers:CreateTimer(r,function()
+ 		local req = CreateHTTPRequestScriptVM("GET", url)
+ 		req:SetHTTPRequestAbsoluteTimeoutMS(20000)
++		if settlement_diag then
++			GemTDSettlementObserve(function() print('[GemTD Settlement] HTTP request started; timeout_ms=20000') end)
++		end
+ 		req:Send(function (result)
++			if settlement_diag then
++				GemTDSettlementObserve(function()
++					if diag_secrets == nil then
++						print('[GemTD Settlement] response withheld: key sanitization context unavailable')
++					else
++						GemTDSettlementResponse(result, diag_secrets)
++					end
++				end)
++			end
+ 			-- local t = json.decode(result["Body"])
+ 			CustomNetTables:SetTableValue( "game_state", cb, { crab = result["Body"], user = user, hehe = RandomInt(1,100000)})	
++			if settlement_diag then
++				GemTDSettlementObserve(function() print('[GemTD Settlement] response FORWARDED to original Panorama callback') end)
++			end
+ 		end)
+     end)
+ end
+@@ -13613,11 +13784,102 @@
+ 	end
+ 
+ 	print('player connect: '.._G.online_player_count..'/'..PlayerResource:GetPlayerCount())
++	if _G.myself == true then self:DebugPlayerInfoWatch() end
+ 	
+ end
+ 
++-- Private debug build: reconcile late direct-connect players with the original backend.
++function GemTD:DebugPlayerInfoValid(info)
++	return type(info) == "table" and type(info.hero_sea) == "table"
++		and type(info.quest) == "table" and type(info.onduty_hero) == "table"
++		and info.onduty_hero.hero_id ~= nil
++end
++
++function GemTD:DebugPlayerInfoPlayers()
++	local ids = {}
++	local state = _G.debug_player_info
++	for id = 0, 20 do
++		if PlayerResource:GetPlayer(id) and PlayerResource:GetConnectionState(id) == DOTA_CONNECTION_STATE_CONNECTED then
++			local steamid = tostring(PlayerResource:GetSteamID(id))
++			if steamid ~= "0" then
++				table.insert(ids, steamid)
++				if state.seen[id] ~= steamid then
++					state.seen[id] = steamid
++					print('[GemTD Debug] player connected id='..id..' steamid='..steamid)
++				end
++			end
++		else
++			state.seen[id] = nil
++		end
++	end
++	return ids
++end
++
++function GemTD:DebugPlayerInfoWatch()
++	if _G.myself ~= true then return end
++	local state = _G.debug_player_info
++	if state.watching or GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then return end
++	state.watching = true
++	Timers:CreateTimer({useGameTime = false, endTime = 0.1, callback = function()
++		if _G.debug_player_info ~= state or _G.myself ~= true or GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then
++			state.watching = false
++			return
++		end
++		-- Resume only the still-current placeholder hero, never a stale reconnect entity.
++		for index, keys in pairs(state.pending) do
++			local hero = EntIndexToHScript(index)
++			if hero == nil or hero:IsNull() or PlayerResource:GetSelectedHeroEntity(hero:GetPlayerID()) ~= hero then
++				state.pending[index] = nil
++			elseif PlayerResource:GetConnectionState(hero:GetPlayerID()) == DOTA_CONNECTION_STATE_CONNECTED then
++				local steamid = tostring(PlayerResource:GetSteamID(hero:GetPlayerID()))
++				if self:DebugPlayerInfoValid(CustomNetTables:GetTableValue("player_info_table", "player_info_"..steamid)) then
++					self:OnPlayerPickHero(keys)
++				end
++			end
++		end
++		if GameRules:State_Get() > DOTA_GAMERULES_STATE_PRE_GAME and next(state.pending) == nil then
++			state.watching = false
++			return
++		end
++		self:OnPlayerStartTeamSelect({})
++		return 1
++	end})
++end
++
++function GemTD:DebugPlayerInfoRequest()
++	local state = _G.debug_player_info
++	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then return nil end
++	if GameRules:State_Get() > DOTA_GAMERULES_STATE_PRE_GAME and next(state.pending) == nil then return nil end
++	local ids = self:DebugPlayerInfoPlayers()
++	local missing = false
++	for _, steamid in ipairs(ids) do
++		if not self:DebugPlayerInfoValid(CustomNetTables:GetTableValue("player_info_table", "player_info_"..steamid)) then missing = true end
++	end
++	local signature = table.concat(ids, ',')
++	if not missing and #ids > 0 then
++		if state.ready ~= signature then
++			print('[GemTD Debug] player-info READY steamids='..signature..' (all connected players; safe to Start Game)')
++			state.ready = signature
++		end
++		return nil
++	end
++	state.ready = nil
++	if #ids == 0 or state.inflight or Time() < state.retry_at then return nil end
++	state.inflight = true
++	print('[GemTD Debug] player-info refresh started steamids='..signature)
++	return ids
++end
++
+ function GemTD:OnPlayerStartTeamSelect(keys)
+-	if _G.online_player_count >= PlayerResource:GetPlayerCount() and _G.is_heros_get_sended == nil then
++	local debug_ids = nil
++	local debug_state = nil
++	if _G.myself == true then
++		self:DebugPlayerInfoWatch()
++		debug_ids = self:DebugPlayerInfoRequest()
++		if debug_ids == nil then return end
++		debug_state = _G.debug_player_info
++	end
++	if debug_ids ~= nil or (_G.online_player_count >= PlayerResource:GetPlayerCount() and _G.is_heros_get_sended == nil) then
+ 		--所有玩家都连入游戏了，访问服务器获取玩家信息！
+ 		_G.is_heros_get_sended = true
+ 
+@@ -13626,9 +13888,13 @@
+ 			_G.pcount ='race'
+ 		end
+ 
+-		local player_steamid_table = {}
+-		for i=0,PlayerResource:GetPlayerCount()-1 do
+-			table.insert(player_steamid_table,tostring(PlayerResource:GetSteamID(i)))
++		local player_steamid_table = debug_ids or {}
++		if debug_ids then
++			_G.pcount = GetMapName() == 'gemtd_race' and 'race' or (#debug_ids..'p')
++		else
++			for i=0,PlayerResource:GetPlayerCount()-1 do
++				table.insert(player_steamid_table,tostring(PlayerResource:GetSteamID(i)))
++			end
+ 		end
+ 		_G.steam_ids_only = JoinTableString(player_steamid_table)
+ 		
+@@ -13642,12 +13908,53 @@
+ 		req:SetHTTPRequestAbsoluteTimeoutMS(20000)
+ 
+ 		req:Send(function(res)
++			if debug_state then
++				if _G.debug_player_info ~= debug_state or GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then return end
++				debug_state.inflight = false
++				debug_state.failures = debug_state.failures + 1
++				debug_state.retry_at = Time() + math.min(30, 5 * debug_state.failures)
++				_G.is_heros_get_sended = nil
++				if res.StatusCode ~= 200 or not res.Body then
++					print('[GemTD Debug] player-info refresh failed HTTP='..tostring(res.StatusCode)..'; retry scheduled')
++				end
++			end
+ 			if res.StatusCode ~= 200 or not res.Body then
+ 				print('GET HERO LIST FAILED!')
+ 				return
+ 			end
+ 
+-			local t = json.decode(res.Body)
++			local t
++			if debug_state then
++				local ok, decoded = pcall(json.decode, res.Body)
++				t = ok and decoded or nil
++				if type(t) ~= 'table' or t.err ~= 0 or type(t.data) ~= 'table' then
++					print('[GemTD Debug] player-info refresh failed: invalid response or backend error; retry scheduled')
++					-- Preserve the original explicit backend block decision.
++					if type(t) == 'table' and t.err == 1200 and t.msg == 'blocked' then
++						prt('#text_black')
++						GameRules:SetGameWinner(DOTA_TEAM_BADGUYS)
++					end
++					return
++				end
++				local complete = true
++				for _, steamid in ipairs(debug_ids) do
++					if not self:DebugPlayerInfoValid(t.data[steamid]) then complete = false end
++				end
++				if not complete then
++					print('[GemTD Debug] player-info refresh failed: missing/incomplete requested records; retry scheduled')
++					return
++				end
++				-- Keep previously initialized records/quests intact on a roster refresh.
++				local new_data = {}
++				for _, steamid in ipairs(debug_ids) do
++					if not self:DebugPlayerInfoValid(CustomNetTables:GetTableValue("player_info_table", "player_info_"..steamid)) then
++						new_data[steamid] = t.data[steamid]
++					end
++				end
++				t.data = new_data
++			else
++				t = json.decode(res.Body)
++			end
+ 			
+ 			if t ~= nil and t.err == 0 then
+ 				print('Connecting server OK')
+@@ -13672,6 +13979,12 @@
+ 
+ 				if t['word_object'] ~= nil then
+ 					_G.word_object = t['word_object']
++				end
++
++				if debug_state then
++					debug_state.failures = 0
++					debug_state.retry_at = 0
++					print('[GemTD Debug] player-info refresh succeeded steamids='..table.concat(debug_ids, ','))
+ 				end
+ 
+ 				-- CustomGameEventManager:Send_ServerToAllClients("set_all_courier_list",{
+@@ -13708,6 +14021,12 @@
+ 
+ 	local player_info_table = CustomNetTables:GetTableValue("player_info_table", "player_info_"..steamid)
+ 	
++	if _G.myself == true and (not self:DebugPlayerInfoValid(player_info_table) or player_info_table.hero_sea[keys.hero] == nil) then
++		print('[GemTD Debug] hero choice WAIT id='..player_id..' steamid='..steamid..'; wait for player-info READY and select again')
++		self:DebugPlayerInfoWatch()
++		return
++	end
++
+ 	local onduty_hero_info = player_info_table['hero_sea'][keys.hero]
+ 	onduty_hero_info['hero_id'] = keys.hero
+ 
+@@ -13789,6 +14108,23 @@
+ 		print('---'..hero:GetPlayerID()..'---'..hero:GetUnitName())
+ 		_G.gem_hero[hero:GetPlayerID()] = hero
+ 		return
++	end
++	if _G.myself == true then
++		local state = _G.debug_player_info
++		if state.initialized[keys.heroindex] then return end
++		local steamid = tostring(PlayerResource:GetSteamID(hero:GetPlayerID()))
++		local info = CustomNetTables:GetTableValue("player_info_table", "player_info_"..steamid)
++		if not self:DebugPlayerInfoValid(info) then
++			if state.pending[keys.heroindex] == nil then
++				print('[GemTD Debug] hero init WAIT id='..hero:GetPlayerID()..' steamid='..steamid..' player_info=false; waiting for backend')
++			end
++			state.pending[keys.heroindex] = keys
++			self:DebugPlayerInfoWatch()
++			return
++		end
++		print('[GemTD Debug] hero init READY id='..hero:GetPlayerID()..' steamid='..steamid..' player_info=true')
++		state.pending[keys.heroindex] = nil
++		state.initialized[keys.heroindex] = true
+ 	end
+     SetHeroLevelShow(hero)
+ 
+@@ -13851,7 +14187,22 @@
+     end
+ 
+     if playercount == PlayerResource:GetPlayerCount() then
++		if _G.myself == true then
++			if _G.debug_player_info.start_scheduled then return end
++			_G.debug_player_info.start_scheduled = true
++		end
+     	Timers:CreateTimer(1,function()
++			if _G.myself == true then
++				if GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then return end
++				-- Backend completion and asynchronous hero replacement must both finish.
++				for id = 0, 20 do
++					if PlayerResource:GetPlayer(id) and PlayerResource:GetConnectionState(id) == DOTA_CONNECTION_STATE_CONNECTED and tostring(PlayerResource:GetSteamID(id)) ~= "0" then
++						local ready_hero = _G.playerid2hero[id]
++						if ready_hero == nil or ready_hero:IsNull() then return 1 end
++					end
++				end
++				if next(_G.debug_player_info.pending) ~= nil then return 1 end
++			end
+     		-- EmitGlobalSound("announcer_diretide_2012_announcer_welcome_0"..RandomInt(3,5))
+     		CustomNetTables:SetTableValue( "game_state", "startgame",{ 
+     			map_name = GetMapName(),
+
+PASS: full Lua 5.1 syntax; activation; two-player offline chat; shared crab assignment;
+money/debug/choose/spawn; local Steam ID; existing-record preservation; early guards;
+unchanged normal build and anti-cheat code; only intended runtime file changed.
+Dota engine execution and actual tower creation still require the manual runtime test.
+GemTD START!

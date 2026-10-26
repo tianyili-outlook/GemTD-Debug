@@ -1,0 +1,65 @@
+{
+  "gemtd_1p.vpk": {
+    "files": 94,
+    "worlds": [
+      "maps/gemtd_1p/world.vwrld_c",
+      "maps/gemtd_1p/entities/default_ents.vents_c",
+      "maps/gemtd_1p.vmap_c"
+    ],
+    "checks": "passed",
+    "header": {
+      "version": 2,
+      "tree_size": 4922,
+      "data_size": 3381776,
+      "chunk_count": 4,
+      "signature_size": 20,
+      "verification": "available section MD5; whole-file MD5; every entry CRC32; extracted SHA256",
+      "tree_md5_present": true,
+      "hash_section_md5_present": true,
+      "blake3_chunks_verified": false,
+      "signature_verified": false
+    }
+  },
+  "gemtd_coop.vpk": {
+    "files": 95,
+    "worlds": [
+      "maps/gemtd_coop/world.vwrld_c",
+      "maps/gemtd_coop/entities/default_ents.vents_c",
+      "maps/gemtd_coop.vmap_c"
+    ],
+    "checks": "passed",
+    "header": {
+      "version": 2,
+      "tree_size": 4979,
+      "data_size": 3176487,
+      "chunk_count": 4,
+      "signature_size": 20,
+      "verification": "available section MD5; whole-file MD5; every entry CRC32; extracted SHA256",
+      "tree_md5_present": true,
+      "hash_section_md5_present": true,
+      "blake3_chunks_verified": false,
+      "signature_verified": false
+    }
+  },
+  "gemtd_race.vpk": {
+    "files": 521,
+    "worlds": [
+      "maps/gemtd_race/entities/default_ents.vents_c",
+      "maps/gemtd_race.vmap_c",
+      "maps/gemtd_race/world.vwrld_c"
+    ],
+    "checks": "passed",
+    "header": {
+      "version": 2,
+      "tree_size": 27883,
+      "data_size": 6018323,
+      "chunk_count": 0,
+      "signature_size": 0,
+      "verification": "available section MD5; whole-file MD5; every entry CRC32; extracted SHA256",
+      "tree_md5_present": false,
+      "hash_section_md5_present": false,
+      "blake3_chunks_verified": false,
+      "signature_verified": false
+    }
+  }
+}

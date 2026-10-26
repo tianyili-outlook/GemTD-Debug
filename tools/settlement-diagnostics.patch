@@ -1,0 +1,207 @@
+--- stable-946DE6E9DDE8C806/addon_game_mode.lua
++++ settlement-diagnostics/addon_game_mode.lua
+@@ -4495,7 +4495,126 @@
+ 	end
+ end
+ --游戏流程6——结束游戏，发送成绩
++-- Read-only observers: failures must never interrupt the original settlement flow.
++function GemTDSettlementObserve(callback)
++	if _G.myself ~= true then return end
++	local ok = pcall(callback)
++	if not ok then print('[GemTD Settlement] diagnostic unavailable (observer error; details withheld)') end
++end
++
++function GemTDSettlementSafe(value, secrets)
++	local text = tostring(value)
++	for _, secret in ipairs(secrets or {}) do
++		if secret ~= '' then
++			local pattern = secret:gsub('(%W)', '%%%1')
++			text = text:gsub(pattern, '<redacted>')
++			-- Also cover a server echo using JSON escapes or URL encoding.
++			local encoded = json.encode(secret)
++			if type(encoded) == 'string' then
++				encoded = encoded:sub(2, -2):gsub('(%W)', '%%%1')
++				text = text:gsub(encoded, '<redacted>')
++			end
++			local escaped = secret:gsub('([^%w%-%._~])', function(c) return string.format('%%%02X', string.byte(c)) end)
++			text = text:gsub(escaped:gsub('(%W)', '%%%1'), '<redacted>')
++		end
++	end
++	-- Never emit credential-bearing fields, even if not one of our own keys.
++	local lower = text:lower()
++	for offset in lower:gmatch('()[:=]') do
++		local name = lower:sub(math.max(1, offset-256), offset-1):match('([%w_%-]+)["\']?%s*$') or ''
++		if name:find('key', 1, true) or name:find('token', 1, true) or name:find('secret', 1, true)
++			or name:find('password', 1, true) or name:find('auth', 1, true) or name:find('credential', 1, true)
++			or name:find('cookie', 1, true) or name:find('signature', 1, true) then
++			return '<withheld: sensitive field>'
++		end
++	end
++	return text:gsub('[%z\1-\8\11\12\14-\31\127]', '?'):gsub('\r', '\\r'):gsub('\n', '\\n')
++end
++
++function GemTDSettlementLog(label, value, secrets, limit)
++	local text = GemTDSettlementSafe(value, secrets)
++	local cap = limit or 2048
++	if #text > cap then text = text:sub(1, cap)..' <truncated>' end
++	print('[GemTD Settlement] '..label..'='..text)
++end
++
++function GemTDSettlementKeys(query)
++	local secrets = {}
++	for index = 1, 5 do
++		local name = index == 1 and 'key' or ('key'..index)
++		local value = query:match('[?&]'..name..'=([^&]*)')
++		local status
++		if value == nil then status = 'MISSING'
++		elseif value == '' then status = 'EMPTY'
++		elseif value == 'Invalid_NotOnDedicatedServer' then status = value
++		elseif value:match('^Invalid_') then status = 'INVALID_SENTINEL (value withheld)'; table.insert(secrets, value)
++		else
++			status = 'PRESENT_OPAQUE (not proof of backend acceptance)'
++			table.insert(secrets, value)
++		end
++		print('[GemTD Settlement] key'..index..'='..status)
++	end
++	return secrets
++end
++
++function GemTDSettlementResponse(result, secrets)
++	GemTDSettlementLog('HTTP completed status', result.StatusCode)
++	if result.StatusCode == nil or result.StatusCode == 0 then
++		print('[GemTD Settlement] transport failure/timeout (HTTP callback supplies no precise cause)')
++	end
++	local body = result.Body
++	if body == nil or body == '' then
++		print('[GemTD Settlement] response body EMPTY/MISSING')
++		return
++	end
++	print('[GemTD Settlement] response body bytes='..#body..' (log cap 16384 bytes)')
++	local ok, decoded = pcall(json.decode, body)
++	-- Inspect decoded strings too: a key may be Unicode-escaped in the raw JSON.
++	local function contains_secret(value, depth)
++		if depth > 16 then return true end
++		if type(value) == 'string' then
++			for _, secret in ipairs(secrets) do if value:find(secret, 1, true) then return true end end
++		elseif type(value) == 'table' then
++			for k, v in pairs(value) do
++				if type(k) == 'string' and GemTDSettlementSafe('"'..k..'":', {}) == '<withheld: sensitive field>' then return true end
++				if contains_secret(k, depth+1) or contains_secret(v, depth+1) then return true end
++			end
++		end
++		return false
++	end
++	if ok and contains_secret(decoded, 0) then
++		print('[GemTD Settlement] response body=<withheld: sensitive content>')
++	else
++		local safe = GemTDSettlementSafe(body, secrets)
++		local length = math.min(#safe, 16384)
++		for offset = 1, length, 1024 do
++			print('[GemTD Settlement] response body chunk '..math.floor((offset-1)/1024+1)..'='..safe:sub(offset, math.min(offset+1023, length)))
++		end
++		if #safe > length then print('[GemTD Settlement] response body TRUNCATED at 16384 bytes') end
++	end
++	if not ok or type(decoded) ~= 'table' then
++		print('[GemTD Settlement] JSON summary unavailable: invalid JSON or non-object response')
++		return
++	end
++	for _, field in ipairs({'err', 'msg', 'error', 'status', 'success', 'award', 'award_item', 'award_extend',
++		'level', 'rank', 'total', 'shell', 'player_count', 'quest', 'quest_expire', 'quest_finish_count', 'finishd_quest'}) do
++		local value = decoded[field]
++		if type(value) == 'table' then value = '<object; see sanitized response body>' end
++		GemTDSettlementLog('JSON '..field, value, secrets, 512)
++	end
++end
++
+ function send_ranking ()
++	GemTDSettlementObserve(function()
++		print('[GemTD Settlement] send_ranking ENTER')
++		GemTDSettlementLog('map', GetMapName())
++		GemTDSettlementLog('level', _G.level)
++		GemTDSettlementLog('game_time', GameRules:GetGameTime())
++		GemTDSettlementLog('player_count', PlayerResource:GetPlayerCount())
++		GemTDSettlementLog('is_cheat', _G.is_cheat)
++		GemTDSettlementLog('is_posted_game', _G.is_posted_game)
++		GemTDSettlementLog('steam_ids', _G.steam_ids_only)
++	end)
+ 	-- if _G.myself == false then 
+ 	-- 	--不让外人提交测试榜单
+ 	-- 	GameRules:SendCustomMessage('游戏结束，测试版本暂时不可以提交合作模式的成绩。',0,0)
+@@ -4503,9 +4622,11 @@
+ 	-- end
+ 
+ 	if _G.is_cheat == 2 then
++		GemTDSettlementObserve(function() print('[GemTD Settlement] SKIP is_cheat == 2') end)
+ 		GameRules:SendCustomMessage("#text_no_upload_because_cheat", 0, 0)
+ 	else
+ 		if _G.is_posted_game == true then
++			GemTDSettlementObserve(function() print('[GemTD Settlement] SKIP already posted') end)
+ 			GameRules:SendCustomMessage('成绩已经提交过了，不再重复提交。',0,0)
+ 			return
+ 		end
+@@ -4620,6 +4741,17 @@
+ 			extra_kill = _G.extra_kill,
+ 			maze_length = _G.gem_maze_length,
+ 		} )
++
++		GemTDSettlementObserve(function()
++			print('[GemTD Settlement] PUBLISHED game_state.send_ranking; awaiting Panorama catch_crab')
++			GemTDSettlementLog('time_cost', g_time)
++			GemTDSettlementLog('finishd_quest', finishd_quest)
++			GemTDSettlementLog('towers', towers_str, nil, 4096)
++			GemTDSettlementLog('kills', _G.kills)
++			GemTDSettlementLog('gold', _G.team_gold)
++			GemTDSettlementLog('extra_kill', _G.extra_kill)
++			GemTDSettlementLog('maze_length', _G.gem_maze_length)
++		end)
+ 
+ 		-- SendCoopRanking({
+ 		-- 	level = _G.level, 
+@@ -7997,17 +8129,46 @@
+ 		return
+ 	end
+ 	local user = keys.user
++	local settlement_diag = _G.myself == true and (cb == 'send_ranking_cb' or (type(url) == 'string' and url:find('/ranking/add/', 1, true) ~= nil))
++	local diag_secrets = nil
++	if settlement_diag then
++		GemTDSettlementObserve(function() print('[GemTD Settlement] catch_crab request received') end)
++	end
+ 
+ 	url = string.gsub(url,"gemtd/ranking/add/","gemtd/202408/ranking/add/")
+-	url = url..GetSendKey()
++	local send_key = GetSendKey()
++	url = url..send_key
++	if settlement_diag then
++		GemTDSettlementObserve(function()
++			diag_secrets = GemTDSettlementKeys(send_key)
++			print('[GemTD Settlement] endpoint=gemtd/202408/ranking/add/ (URL arguments and keys omitted)')
++			GemTDSettlementLog('callback', cb, diag_secrets)
++			GemTDSettlementLog('request_user', user, diag_secrets)
++		end)
++	end
+ 	
+ 	local r = RandomFloat(0,1)
+ 	Timers:CreateTimer(r,function()
+ 		local req = CreateHTTPRequestScriptVM("GET", url)
+ 		req:SetHTTPRequestAbsoluteTimeoutMS(20000)
++		if settlement_diag then
++			GemTDSettlementObserve(function() print('[GemTD Settlement] HTTP request started; timeout_ms=20000') end)
++		end
+ 		req:Send(function (result)
++			if settlement_diag then
++				GemTDSettlementObserve(function()
++					if diag_secrets == nil then
++						print('[GemTD Settlement] response withheld: key sanitization context unavailable')
++					else
++						GemTDSettlementResponse(result, diag_secrets)
++					end
++				end)
++			end
+ 			-- local t = json.decode(result["Body"])
+ 			CustomNetTables:SetTableValue( "game_state", cb, { crab = result["Body"], user = user, hehe = RandomInt(1,100000)})	
++			if settlement_diag then
++				GemTDSettlementObserve(function() print('[GemTD Settlement] response FORWARDED to original Panorama callback') end)
++			end
+ 		end)
+     end)
+ end

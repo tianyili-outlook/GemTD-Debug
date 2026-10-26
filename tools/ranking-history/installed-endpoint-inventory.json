@@ -1,0 +1,127 @@
+[
+  {
+    "path": "panorama/layout/custom_game/game_info.vxml_c",
+    "decoded_line": 14,
+    "text": "'http://101.200.189.65:2009/gemtd/ranking/get',"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 3828,
+    "text": "send_ranking ()"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 4366,
+    "text": "local url = \"http://gemtd.ppbizon.com/gemtd/202408/race/ranking/save/@\".._G.death_stack..\"?hehe=\"..RandomInt(1,100000)..\"&duration=\"..game_duration..\"&wave=\".._G.level"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 4494,
+    "text": "function send_ranking ()"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 4606,
+    "text": "CustomNetTables:SetTableValue( \"game_state\", \"send_ranking\", {"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 6325,
+    "text": "send_ranking ()"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 7475,
+    "text": "send_ranking ()"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 7991,
+    "text": "url = string.gsub(url,\"gemtd/ranking/add/\",\"gemtd/202408/ranking/add/\")"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 13926,
+    "text": "--     local url = 'http://gemtd.ppbizon.com/gemtd/ranking/add/@'..keys.time_cost..'@'..keys.level..'@'..keys.kills..'@'..keys.player_ids..'@'..(keys.finishd_quest or ',') + '@' + local_id + '?hehe=' + Math.random() + '&towers=' + data.towers + '&ac=20180827&gold=' + data.gold + '&extra_kill=' + data.extra_kill + '&maze_length=' + data.maze_length;"
+  },
+  {
+    "path": "scripts/vscripts/addon_game_mode.lua",
+    "decoded_line": 13928,
+    "text": "--     GameEvents.SendCustomGameEventToServer(\"catch_crab\", { url: url, cb: 'send_ranking_cb', user: local_id });"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 610,
+    "text": "var url222 = 'http://gemtd.ppbizon.com/gemtd/201807/mmr/get/@' + ids.join(',') + '?myself=' + Game.GetPlayerInfo(Players.GetLocalPlayer()).player_steamid;"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 675,
+    "text": "var url = 'http://gemtd.ppbizon.com/gemtd/201807/mmr/get/@' + steam_ids + '?no_sort=1&hehe=' + Math.random();"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1544,
+    "text": "if (key == 'send_ranking') { //发送成绩"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1547,
+    "text": "var url = 'http://gemtd.ppbizon.com/gemtd/ranking/add/@' + data.time_cost + '@' + data.level + '@' + data.kills + '@' + data.player_ids + '@' + (data.finishd_quest || ',') + '@' + local_id + '?hehe=' + Math.random() + '&towers=' + data.towers + '&ac=20180827&gold=' + data.gold + '&extra_kill=' + data.extra_kill + '&maze_length=' + data.maze_length+'&player_count='+data.player_count;"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1549,
+    "text": "GameEvents.SendCustomGameEventToServer(\"catch_crab\", { url: url, cb: 'send_ranking_cb', user: local_id });"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1551,
+    "text": "if (key == 'send_ranking_cb') {"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 3606,
+    "text": "RequestProxy('http://gemtd.ppbizon.com/gemtd/leaderboard/@' + local_id, function(aa){"
+  },
+  {
+    "path": "panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 3686,
+    "text": "RequestProxy('http://gemtd.ppbizon.com/gemtd/leaderboard/collect/@' + local_id, function(r){"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 570,
+    "text": "var url222 = 'http://gemtd.ppbizon.com/gemtd/201807/mmr/get/@' + ids.join(',') + '?myself=' + Game.GetPlayerInfo(Players.GetLocalPlayer()).player_steamid;"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 635,
+    "text": "var url = 'http://gemtd.ppbizon.com/gemtd/201807/mmr/get/@' + steam_ids + '?no_sort=1&hehe=' + Math.random();"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 720,
+    "text": "RequestProxy('http://gemtd.ppbizon.com/gemtd/20181201/ranking/getall?hehe=' + Math.random(), function(aa){"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1534,
+    "text": "if (key == 'send_ranking') { //发送成绩"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1537,
+    "text": "var url = 'http://gemtd.ppbizon.com/gemtd/ranking/add/@' + data.time_cost + '@' + data.level + '@' + data.kills + '@' + data.player_ids + '@' + (data.finishd_quest || ',') + '@' + local_id + '?hehe=' + Math.random() + '&towers=' + data.towers + '&ac=20180827&gold=' + data.gold + '&extra_kill=' + data.extra_kill + '&maze_length=' + data.maze_length+'&player_count='+data.player_count;"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1539,
+    "text": "GameEvents.SendCustomGameEventToServer(\"catch_crab\", { url: url, cb: 'send_ranking_cb', user: local_id });"
+  },
+  {
+    "path": "gemtd2/panorama/scripts/custom_game/gemtd.vjs_c",
+    "decoded_line": 1541,
+    "text": "if (key == 'send_ranking_cb') {"
+  }
+]
