@@ -1,4 +1,5 @@
 """Focused Lua 5.1 checks; run with the local tools/.test-deps lupa package."""
+import argparse
 import difflib
 import hashlib
 import json
@@ -10,29 +11,35 @@ sys.path.insert(0, str(ROOT / 'tools/.test-deps'))
 from lupa.lua51 import LuaRuntime
 from vpk_baseline import read_vpk
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--behavior-only', action='store_true', help='Run Lua behavior tests without historical VPK/file-scope assertions or patch output')
+args = parser.parse_args()
+
 runtime = ROOT / 'game/gemtd_debug'
 relative = 'scripts/vscripts/addon_game_mode.lua'
 source = (runtime / relative).read_text(encoding='utf-8')
-_, entries, _ = read_vpk(ROOT / 'baseline/474619917.vpk')
-original = next(data.decode('utf-8').replace('\r\n', '\n') for record, data in entries if record['path'] == relative)
-diff = ''.join(difflib.unified_diff(original.splitlines(True), source.splitlines(True),
-                                 fromfile='baseline/' + relative, tofile='game/gemtd_debug/' + relative))
-(ROOT / 'tools/debug-mode.patch').write_text(diff, encoding='utf-8')
-print(diff)
-
-before = json.loads((ROOT / 'tools/pre_debug_file_hashes.json').read_text())
-after = {p.relative_to(runtime).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-         for p in runtime.rglob('*') if p.is_file()}
-assert before.keys() == after.keys(), 'Runtime file set changed'
-assert [p for p in before if before[p] != after[p]] == [relative], 'Unrelated runtime files changed'
 
 def section(text, start, end):
     return text.split(start, 1)[1].split(end, 1)[0]
 
-for start, end in [('function gemtd_build_stone(keys)', 'function choose_stone(keys)'),
-                   ('function GemTD:OnNPCSpawned( keys )', 'function play_particle('),
-                   ('function DetectCheatsThinker ()', 'function GemTD:InitGameMode()')]:
-    assert section(source, start, end) == section(original, start, end)
+if not args.behavior_only:
+    _, entries, _ = read_vpk(ROOT / 'baseline/474619917.vpk')
+    original = next(data.decode('utf-8').replace('\r\n', '\n') for record, data in entries if record['path'] == relative)
+    diff = ''.join(difflib.unified_diff(original.splitlines(True), source.splitlines(True),
+                                     fromfile='baseline/' + relative, tofile='game/gemtd_debug/' + relative))
+    (ROOT / 'tools/debug-mode.patch').write_text(diff, encoding='utf-8')
+    print(diff)
+
+    before = json.loads((ROOT / 'tools/pre_debug_file_hashes.json').read_text())
+    after = {p.relative_to(runtime).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in runtime.rglob('*') if p.is_file()}
+    assert before.keys() == after.keys(), 'Runtime file set changed'
+    assert [p for p in before if before[p] != after[p]] == [relative], 'Unrelated runtime files changed'
+
+    for start, end in [('function gemtd_build_stone(keys)', 'function choose_stone(keys)'),
+                       ('function GemTD:OnNPCSpawned( keys )', 'function play_particle('),
+                       ('function DetectCheatsThinker ()', 'function GemTD:InitGameMode()')]:
+        assert section(source, start, end) == section(original, start, end)
 
 lua = LuaRuntime()
 lua.execute('function check_syntax(code) local f, err = loadstring(code); assert(f, err) end')
@@ -107,5 +114,6 @@ say(1, '-debug'); assert(_G.is_debug == false)
 ''')
 print('PASS: full Lua 5.1 syntax; activation; two-player offline chat; shared crab assignment;')
 print('money/debug/choose/spawn; local Steam ID; existing-record preservation; early guards;')
-print('unchanged normal build and anti-cheat code; only intended runtime file changed.')
+if not args.behavior_only:
+    print('unchanged normal build and anti-cheat code; only intended runtime file changed.')
 print('Dota engine execution and actual tower creation still require the manual runtime test.')

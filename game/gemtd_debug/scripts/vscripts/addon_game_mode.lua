@@ -34,6 +34,7 @@ end
 --加载需要的模块
 md5 = require('md5')
 json = require('dkjson')
+GemTDContribution = require('coop_contribution')
 BASE_MODULES = {
 	'pathfinder/core/heuristics',
 	'pathfinder/core/node', 'pathfinder/core/path',
@@ -823,6 +824,7 @@ function InitVaribles()
 		[3] = 0,
 	}
 	_G.damage = {}
+	GemTDContribution.Reset()
 	_G.damage_race = {
 		[0] = {},
 		[1] = {},
@@ -3268,6 +3270,7 @@ end
 
 --游戏流程5——全局定时器事件（游戏计时、刷怪、撞击城堡）
 function OnThink()
+	GemTDContribution.Tick()
     time_tick = time_tick +1
     for i=0,3 do
     	if PlayerResource:GetPlayer(i) ~= nil and PlayerResource:GetPlayer(i):GetAssignedHero() ~= nil then
@@ -5276,6 +5279,7 @@ function gemtd_build_stone(keys)
 
 	u.ftd = 2009
 	u:SetOwner(caster)
+	GemTDContribution.RegisterBase(u, player_id)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 	u:AddAbility("no_hp_bar")
@@ -5565,6 +5569,7 @@ function merge_shiban( shiban_name, shiban_ability, shiban_cd, caster )
 		EmitGlobalSound("ui.crafting_gem_drop")
 		return
 	end
+	local contribution_materials = GemTDContribution.RecipeMaterials(shiban_name, _G.build_curr[player_id], caster, {_G.gemtd_merge_shiban})
 	--建造石板
 	local u = CreateUnitByName(shiban_name, p,false,nil,nil,DOTA_TEAM_GOODGUYS) 
 	u.ftd = 2009
@@ -5579,6 +5584,7 @@ function merge_shiban( shiban_name, shiban_ability, shiban_cd, caster )
 
 	_G.shiban_index[xxx..'_'..yyy] = u
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 
 	u:AddAbility("no_hp_bar")
@@ -5764,6 +5770,7 @@ function choose_stone(keys)
 	if caster.ppp then
 		ParticleManager:DestroyParticle(caster.ppp,true)
 	end
+	local contribution_materials = GemTDContribution.Selection(caster, unit_name, _G.build_curr[player_id])
 	caster:Destroy()
 
 	EmitGlobalSound("ui.npe_objective_given")
@@ -5775,6 +5782,7 @@ function choose_stone(keys)
 	u.ftd = 2009
 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -5852,6 +5860,7 @@ function choose_update_stone(keys)
 	if caster.ppp then
 		ParticleManager:DestroyParticle(caster.ppp,true)
 	end
+	local contribution_materials = GemTDContribution.Selection(caster, unit_name, _G.build_curr[player_id])
 	caster:Destroy()
 
 	EmitGlobalSound("ui.npe_objective_given")
@@ -5862,6 +5871,7 @@ function choose_update_stone(keys)
 	u.ftd = 2009
 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -5900,6 +5910,7 @@ function choose_update_update_stone(keys)
 	local caster = keys.caster
 	local owner =  caster:GetOwner()
 	local player_id = owner:GetPlayerID()
+	local contribution_candidates = GemTDContribution.Selection(caster, "gemtd_zhenjiazhishi", _G.build_curr[player_id])
 
 	--GameRules:SendCustomMessage("选择了石头", 0, 0)
 	caster:RemoveAbility("gemtd_choose_stone")
@@ -5953,6 +5964,7 @@ function choose_update_update_stone(keys)
 	if caster.ppp then
 		ParticleManager:DestroyParticle(caster.ppp,true)
 	end
+	local contribution_materials = unit_name == "gemtd_zhenjiazhishi" and contribution_candidates or GemTDContribution.Selection(caster, unit_name)
 	caster:Destroy()
 
 	EmitGlobalSound("ui.npe_objective_given")
@@ -5972,6 +5984,7 @@ function choose_update_update_stone(keys)
 	-- CustomNetTables:SetTableValue( "game_state", "bullet", {player_id = player_id, text = unit_name, hehe = RandomInt(1,100000)})
 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -6101,6 +6114,7 @@ function gemtd_downgrade_stone (keys)
 	if caster.ppp then
 		ParticleManager:DestroyParticle(caster.ppp,true)
 	end
+	local contribution_materials = GemTDContribution.Selection(caster, unit_name, _G.build_curr[player_id])
 	caster:Destroy()
 
 	EmitGlobalSound("DOTA_Item.Buckler.Activate")
@@ -6111,6 +6125,7 @@ function gemtd_downgrade_stone (keys)
 	u.ftd = 2009 
 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -6205,6 +6220,7 @@ function gemtd_downgrade_stone_fengbaozhichui (keys)
 	if caster.ppp then
 		ParticleManager:DestroyParticle(caster.ppp,true)
 	end
+	local contribution_materials = GemTDContribution.Selection(caster, unit_name, _G.build_curr[player_id])
 	caster:Destroy()
 
 	EmitGlobalSound("DOTA_Item.Buckler.Activate")
@@ -6214,6 +6230,7 @@ function gemtd_downgrade_stone_fengbaozhichui (keys)
 	local u = CreateUnitByName(unit_name, p,false,nil,nil,DOTA_TEAM_GOODGUYS)
 	u.ftd = 2009 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -6383,6 +6400,7 @@ end
 function start_shuaguai()
 
 	_G.damage = {}
+	GemTDContribution.StartRound(_G.level)
 	_G.perfect_this_level = true
 
 	if _G.level == 51 then
@@ -7909,6 +7927,7 @@ function InvisibleUnitCast(keys)
 	uu.ftd = 2009
 	uu.father = shiban
 	uu:SetOwner(shiban)
+	GemTDContribution.BindProxy(uu, shiban)
 
 	uu:AddAbility(shiban_ability)
 	uu:FindAbilityByName(shiban_ability):SetLevel(ability_level)
@@ -9462,6 +9481,7 @@ function merge_tower( tower_name, caster )
 		--辅助table，用来缩小can merge的范围
 		local merge_helper = {};
 		local total_level = 0
+		local contribution_materials = GemTDContribution.Capture(caster)
 
 		--优先标记caster
 		caster.merge_mark = 1
@@ -9507,6 +9527,7 @@ function merge_tower( tower_name, caster )
 				if i_unit.ppp then
 					ParticleManager:DestroyParticle(i_unit.ppp,true)
 				end
+				GemTDContribution.Join(contribution_materials, GemTDContribution.Capture(i_unit))
 				RemoveDamageStat(i_unit:entindex())
 				i_unit:Destroy()
 				p.z=1400
@@ -9570,6 +9591,7 @@ function merge_tower( tower_name, caster )
 		end
 		
 		u:SetOwner(owner)
+		GemTDContribution.Attach(u, player_id, contribution_materials)
 		u:SetControllableByPlayer(player_id, true)
 		u:SetForwardVector(Vector(0,-1,0))
 
@@ -9966,6 +9988,7 @@ function merge_tower1( tower_name, caster )
 
 	local owner =  caster:GetOwner()
 	local player_id = owner:GetPlayerID()
+	local contribution_materials = GemTDContribution.RecipeMaterials(tower_name, _G.build_curr[player_id], caster, {_G.gemtd_merge, _G.gemtd_merge_secret})
 
 	--GameRules:SendCustomMessage("选择了石头", 0, 0)
 	caster:RemoveAbility(tower_name.."1")
@@ -10027,6 +10050,7 @@ function merge_tower1( tower_name, caster )
 	end
 
 	u:SetOwner(owner)
+	GemTDContribution.Attach(u, player_id, contribution_materials)
 	u:SetControllableByPlayer(player_id, true)
 	u:SetForwardVector(Vector(0,-1,0))
 
@@ -10899,6 +10923,7 @@ function shiban_update_one(shiban,i,j)
 					end
 				end
 				
+				local contribution_materials = GemTDContribution.Collect({shiban, u1, u2})
 				shiban:Destroy()
 				u1:Destroy()
 				u2:Destroy()
@@ -10917,6 +10942,7 @@ function shiban_update_one(shiban,i,j)
 				-- CustomNetTables:SetTableValue( "game_state", "bullet", {player_id = player_id, text = shengji_shiban, hehe = RandomInt(1,100000)})
 
 				u:SetOwner(owner)
+				GemTDContribution.Attach(u, player_id, contribution_materials)
 				u:SetControllableByPlayer(player_id, true)
 
 				u:AddAbility("no_hp_bar")
@@ -10980,6 +11006,7 @@ function ChainFrost(u,t)
 	local uu = CreateUnitByName("gemtd_feicuimoxiang_yinxing", u:GetAbsOrigin() ,false,nil,nil, DOTA_TEAM_GOODGUYS) 
 	uu.father = u
 	uu:SetOwner(u)
+	GemTDContribution.BindProxy(uu, u)
 	uu.ftd = 2009
 	uu:AddAbility("chain_frost")
 	uu:FindAbilityByName("chain_frost"):SetLevel(1)
@@ -13209,6 +13236,7 @@ function DamageStat(attacker, victim, damage)
 
 	if GetMapName() == 'gemtd_1p' or GetMapName() == 'gemtd_coop' then
 		AddDamageStat(attacker_id, damage)
+		GemTDContribution.RecordDamage(attacker, damage)
 
 		local g_time = GameRules:GetGameTime() - _G.game_time
 		if _G.last_g_time == nil then
@@ -13599,6 +13627,7 @@ function EndRoundIfNoEnemyAlive()
 					end
 				end
 
+				GemTDContribution.FinishRound()
 				_G.damage = {}
 				_G.perfect_this_level = true
 			end)

@@ -3,6 +3,7 @@
 	custom_net_tables =
 	[
 		"game_state",
+		"coop_contribution",
 		"game_maze",
 		"gemtd_ranking",
 		"player_info_table",

@@ -1,4 +1,5 @@
 """Compare original/new settlement execution with fake HTTP; no live submissions."""
+import argparse
 import difflib
 import hashlib
 import json
@@ -7,6 +8,9 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/.test-deps'))
 from lupa.lua51 import LuaRuntime
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--behavior-only',action='store_true',help='Run Lua behavior tests without historical release file-scope assertions or patch output')
+args=parser.parse_args()
 runtime=ROOT/'game/gemtd_debug'
 path='scripts/vscripts/addon_game_mode.lua'
 old=(ROOT/'tools/pre-settlement-addon_game_mode.lua').read_text(encoding='utf-8')
@@ -103,6 +107,10 @@ assert len(l.globals().requests)==1 and 'SECRET_ALPHA_0123456789' not in l.globa
 l=setup(new,False); l.execute('send_ranking(); request()'); assert '[GemTD Settlement]' not in l.globals().logs_text()
 l=setup(new); l.execute('GemTD:OnCatchCrab({url="http://example.invalid/unrelated",cb="other",user="TEST_PLAYER"}); timers[1].callback(); requests[1].callback({StatusCode=200,Body="{}"})')
 assert '[GemTD Settlement]' not in l.globals().logs_text()
+
+if args.behavior_only:
+    print('PASS: Lua 5.1 settlement behavior; original state/HTTP/callback equality; error handling; sensitive-data redaction; observer isolation.')
+    raise SystemExit(0)
 
 # Every preexisting function outside the two instrumented handlers is byte-identical.
 def rest(s):

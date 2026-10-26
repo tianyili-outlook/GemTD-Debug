@@ -1,6 +1,8 @@
 # GemTD private development baseline
 
-当前主机为 **2026-09-26 结算诊断版**，仅增加只读日志；Friend Kit 仍为稳定版 `946DE6E9DDE8C806`。主机与该包的 Lua 差异是预期的。单人 coop 测试说明见 [SETTLEMENT_DIAGNOSTICS.md](SETTLEMENT_DIAGNOSTICS.md)。
+2026-10-26：本地新增「合作贡献统计」开发模块，保留原伤害榜并按材料建造者/等级权重分摊输出。实现、项目进展梳理、自动测试与游戏内验收见 [COOP_CONTRIBUTION.md](COOP_CONTRIBUTION.md)。尚未完成本次 Dota 多人/界面实测，Friend Kit 未重建。
+
+此前开发基线为 **2026-09-26 结算诊断版**，该次仅增加只读日志；Friend Kit 仍为稳定版 `946DE6E9DDE8C806`。主机与该包的 Lua 差异是预期的。单人 coop 测试说明见 [SETTLEMENT_DIAGNOSTICS.md](SETTLEMENT_DIAGNOSTICS.md)。
 
 ## Friend installer (updated 2026-09-24)
 
