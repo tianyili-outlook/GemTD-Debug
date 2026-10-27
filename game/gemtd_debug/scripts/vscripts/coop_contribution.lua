@@ -215,7 +215,10 @@ function M.Publish()
     write(prefix, {id = round.id, level = round.level, finished = round.finished and 1 or 0,
         damage = round.damage, other_damage = round.other_damage, players = players,
         pages = pages, tower_count = #ids})
-    write("meta", {enabled = 1, latest = round.id, version = 1})
+    if round.meta_dirty then
+        write("meta", {enabled = 1, latest = round.id, version = 1})
+        round.meta_dirty = false
+    end
     round.dirty = false
 end
 
@@ -232,7 +235,7 @@ function M.StartRound(level)
     M.FinishRound()
     state.round_count = state.round_count + 1
     state.round = {id = state.round_count, level = level, towers = {}, damage = 0,
-        other_damage = 0, finished = false, dirty = true, index_dirty = true}
+        other_damage = 0, finished = false, dirty = true, index_dirty = true, meta_dirty = true}
     M.Publish()
 end
 
@@ -258,10 +261,10 @@ end
 
 function M.Tick()
     if not enabled() then return end
+    -- Regular updates are triggered by the existing DamageStat throttle.
+    -- Retain this Think hook only as the original end-of-game fallback.
     if _G.game_status == 3 or GameRules:State_Get() >= DOTA_GAMERULES_STATE_POST_GAME then
         M.FinishRound()
-    else
-        M.Publish()
     end
 end
 

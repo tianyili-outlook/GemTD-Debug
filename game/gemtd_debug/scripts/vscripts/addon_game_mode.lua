@@ -9096,6 +9096,10 @@ function build_1_stone(keys)
 	local u = CreateUnitByName((keys.stone_name or "gemtd_stone"), p,false,nil,nil,DOTA_TEAM_GOODGUYS)
 	u.ftd = 2009
 	u:SetOwner(caster)
+	-- Hero giant-stone skill: register only the genuine rolled basic gem, never blocking stones.
+	if keys.stone_name and GemTDContribution.GemWeight(keys.stone_name) then
+		GemTDContribution.RegisterBase(u, player_id)
+	end
 	if u:GetUnitName() == "gemtd_stone" then
 		ChangeStoneStyle(u)
 	end
@@ -13249,6 +13253,7 @@ function DamageStat(attacker, victim, damage)
 		if g_time - _G.last_g_time > 1 then
 			_G.last_g_time = g_time
 			CustomNetTables:SetTableValue( "game_state", "damage_stat", { level = _G.level, damage_table = _G.damage , time_this_level = time_this_level, hehe = RandomInt(1,100000) } )
+			GemTDContribution.Publish()
 		end
 	elseif GetMapName() == 'gemtd_race' then
 		local player_id = attacker:GetOwner():GetPlayerID()

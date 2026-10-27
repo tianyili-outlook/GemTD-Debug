@@ -37,6 +37,7 @@ function clone(t)
 end
 CustomNetTables={SetTableValue=function(_,t,k,v)
  net[t..'/'..k]=clone(v); writes=writes+1
+ write_counts[t..'/'..k]=(write_counts[t..'/'..k] or 0)+1
 end}
 GameRules={GetGameTime=function() return now end, State_Get=function() return phase end,
  GetGameModeEntity=function() return game_mode end}
@@ -45,7 +46,7 @@ function RandomInt(a,b) return a end
 function RandomFloat() return 0 end
 function Vector(x,y,z) return {x=x,y=y,z=z} end
 function noop() end
-EmitGlobalSound=noop; ShowCombat=noop; PlayCombineSound=noop; play_merge_particle=noop
+EmitGlobalSound=noop; EmitSoundOn=noop; ShowCombat=noop; PlayCombineSound=noop; play_merge_particle=noop
 play_particle=noop; stone_quest=noop; send_merge_board=noop; finish_build=noop
 SetAbilityActiveStatus=noop; ChangeStoneStyle=noop; sync_player_gold=noop; level_up=noop
 SetQuest=noop; start_shiban_timer=noop; FindEnemyPath=noop
@@ -65,6 +66,8 @@ function unit(name,id)
  local u={name=name,id=next_entity,pid=id,dead=false,pos=Vector(0,0,0),abilities={}}
  function u:IsNull() return self.dead end
  function u:IsAlive() return not self.dead end
+ function u:IsHero() return false end
+ function u:HasModifier() return false end
  function u:GetUnitName() assert(not self.dead,'Read name after destruction'); return self.name end
  function u:GetOwner() return self.owner end
  function u:GetPlayerID() return self.pid end
@@ -89,7 +92,7 @@ function CreateUnitByName(name,p)
  local u=unit(name,-1); u.pos=clone(p); created[#created+1]=u; return u
 end
 function reset()
- map='gemtd_coop'; phase=7; now=10; net={}; writes=0; created={}; callbacks={}; entities={}; next_entity=0; game_mode={}
+ map='gemtd_coop'; phase=7; now=10; net={}; writes=0; write_counts={}; created={}; callbacks={}; entities={}; next_entity=0; game_mode={}
  _G.game_status=2; _G.level=1; _G.damage={}; _G.damage_race={[0]={},[1]={},[2]={},[3]={}}
  _G.game_time=0; _G.stop_watch=0; _G.last_g_time=nil
  _G.gemtd_pool={}; _G.gemtd_pool_race={[0]={},[1]={},[2]={},[3]={}}
@@ -124,7 +127,8 @@ for name in ['AddDamageStat', 'RemoveDamageStat', 'GetDamageStat', 'DamageStat',
              'merge_tower', 'merge_tower1', 'choose_stone', 'choose_update_stone',
              'choose_update_update_stone', 'gemtd_downgrade_stone',
              'gemtd_downgrade_stone_fengbaozhichui', 'merge_shiban', 'shiban_update_one',
-             'ChainFrost', 'InvisibleUnitCast', 'EndRoundIfNoEnemyAlive']:
+             'ChainFrost', 'InvisibleUnitCast', 'EndRoundIfNoEnemyAlive',
+              'build_1_stone', 'GemTD:DamageFilter']:
     lua.execute(function(name))
 
 tests = {
@@ -225,18 +229,80 @@ local upgraded=_G.shiban_index['19_19']; assert(upgraded.name=='gemtd_hongliushi
 assert(upgraded.gemtd_contribution.total_weight==24)
 for i=0,2 do assert(upgraded.gemtd_contribution.weights[i]==8) end
 ''',
-    'hidden damage units retain source after destruction and entity index reuse': r'''
+    'original DamageFilter: live father counts once for source tower': r'''
 reset(); GemTDContribution.StartRound(1)
 local a=gem('gemtd_b1',0); local b=gem('gemtd_y1',1); local c=gem('gemtd_d1',2)
 local silver=merge('gemtd_baiyin',{a,b,c},a)
 InvisibleUnitCast({caster=silver,ability='test',level=1}); local proxy=created[#created]
-ChainFrost(silver,nil); local frost=created[#created]
-local original_id=silver.id; silver:Destroy()
-local replacement=gem('gemtd_b111111',3); replacement.id=original_id
-hit(proxy,60000); hit(frost,30000); hit(replacement,1050); GemTDContribution.Publish()
-assert(tower(1,silver).damage==90000 and tower(1,replacement).damage==1050)
-assert(tower(1,silver).players['2'].damage==30000)
-assert(_G.damage[proxy.id]==60000 and _G.damage[frost.id]==30000)
+local victim=unit('test_creep',-1)
+assert(GemTD:DamageFilter({entindex_attacker_const=proxy.id, entindex_victim_const=victim.id,
+    damage=90000, damagetype_const=0})==true)
+GemTDContribution.Publish()
+assert(_G.damage[silver.id]==90000 and _G.damage[proxy.id]==nil)
+local stat=tower(1,silver)
+for id=0,2 do assert(stat.players[tostring(id)].damage==30000) end
+assert(summary(1).damage==90000)
+''',
+    'original DamageFilter: destroyed father damage is ignored': r'''
+reset(); GemTDContribution.StartRound(1)
+local a=gem('gemtd_b1',0); local b=gem('gemtd_y1',1); local c=gem('gemtd_d1',2)
+local silver=merge('gemtd_baiyin',{a,b,c},a)
+InvisibleUnitCast({caster=silver,ability='test',level=1}); local proxy=created[#created]
+local victim=unit('test_creep',-1)
+local before=writes
+silver:Destroy()
+assert(GemTD:DamageFilter({entindex_attacker_const=proxy.id, entindex_victim_const=victim.id,
+    damage=60000, damagetype_const=0})==nil)
+assert(next(_G.damage)==nil and summary(1).damage==0 and writes==before)
+''',
+    'original DamageFilter: delayed hit after parent merged is ignored': r'''
+reset(); GemTDContribution.StartRound(1)
+local a=gem('gemtd_b1',0); local b=gem('gemtd_y1',1); local c=gem('gemtd_d1',2)
+local silver=merge('gemtd_baiyin',{a,b,c},a)
+InvisibleUnitCast({caster=silver,ability='test',level=1}); local proxy=created[#created]
+local q=gem('gemtd_q11',1); local r=gem('gemtd_r111',2)
+local knight=merge('gemtd_baiyinqishi',{silver,q,r},q)
+local victim=unit('test_creep',-1)
+assert(silver:IsNull() and knight:IsAlive())
+assert(GemTD:DamageFilter({entindex_attacker_const=proxy.id, entindex_victim_const=victim.id,
+    damage=60000, damagetype_const=0})==nil)
+assert(GemTD:DamageFilter({entindex_attacker_const=knight.id, entindex_victim_const=victim.id,
+    damage=110000, damagetype_const=0})==true)
+GemTDContribution.Publish()
+assert(_G.damage[silver.id]==nil and _G.damage[proxy.id]==nil)
+assert(summary(1).damage==110000 and tower(1,knight).damage==110000)
+assert(not net['coop_contribution/round_1_tower_'..silver.gemtd_contribution.id])
+''',
+    'giant-stone build_1_stone tracks actual gem, not path-blocking stone': r'''
+reset(); local builder=heroes[2]; builder.owner=unit('player',2)
+_G.gem_map=nil; _G.gem_path={{1},{1},{1},{1},{1},{1}}
+local ok,block=build_1_stone({p=Vector(0,0,0),caster=builder,can_remove_stone=false})
+assert(ok and block:GetUnitName()=='gemtd_stone' and not block.gemtd_contribution)
+local ok2,built=build_1_stone({p=Vector(128,0,0),caster=builder,stone_name='gemtd_b1111'})
+assert(ok2 and built:GetOwner()==builder)
+assert(built.gemtd_contribution.weights[2]==12 and built.gemtd_contribution.total_weight==12)
+assert(not built.gemtd_contribution.weights[0])
+''',
+    'live contribution publishes at original damage_stat cadence': r'''
+reset(); GemTDContribution.StartRound(1)
+local u=gem('gemtd_b1',0)
+local meta_before=write_counts['coop_contribution/meta']
+assert(meta_before==2) -- reset and round start
+hit(u,10)
+assert(write_counts['game_state/damage_stat']==1)
+assert(write_counts['coop_contribution/round_1']==2)
+local n=writes
+now=10.5; hit(u,20); GemTDContribution.Tick()
+assert(writes==n and write_counts['game_state/damage_stat']==1)
+now=11.0; hit(u,30)
+assert(writes==n) -- original gate uses >1, not >=1
+now=11.1; hit(u,40)
+assert(write_counts['game_state/damage_stat']==2)
+assert(write_counts['coop_contribution/round_1']==3)
+assert(write_counts['coop_contribution/meta']==meta_before)
+assert(summary(1).damage==100)
+GemTDContribution.FinishRound()
+assert(summary(1).finished==1 and summary(1).damage==100)
 ''',
     'integer conservation independent of hit frequency, same player and sparse IDs': r'''
 reset(); local a=gem('gemtd_b1',0); local b=gem('gemtd_y1',3); local c=gem('gemtd_d1',3)
